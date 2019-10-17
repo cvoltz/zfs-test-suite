@@ -1,0 +1,90 @@
+# © Copyright 2019 Hewlett Packard Enterprise Development LP
+---
+- hosts: all
+
+  vars:
+    separate_spl: true
+    zfs_version: 0.7.13
+
+  tasks:
+    - name: Install required development packages
+      become: true
+      yum:
+        name:
+          - autoconf
+          - automake
+          - device-mapper-devel
+          - elfutils-libelf-devel
+          - git
+          - kernel-devel
+          - ksh
+          - libacl-devel
+          - libaio-devel
+          - libattr-devel
+          - libblkid-devel
+          - libselinux-devel
+          - libtirpc-devel
+          - libtool
+          - libudev-devel
+          - libuuid-devel
+          - make
+          - openssl-devel
+          - rpm-build
+          - zlib-devel
+          - epel-release
+        state: present
+
+    - name: Install required development packages from EPEL
+      become: true
+      yum:
+        name:
+          - ccache
+          - python36
+          - python36-devel
+          - python36-setuptools
+          - python36-cffi
+
+    - name: SPL block
+      block:
+        - name: Create SPL source directory
+          file:
+            path: /home/vagrant/spl
+            state: directory
+
+        - name: Clone SPL repository
+          git:
+            repo: https://github.com/zfsonlinux/spl.git
+            dest: /home/vagrant/spl
+            version: "spl-{{ zfs_version }}"
+
+        - name: Build SPL
+          shell: |
+            sh autogen.sh &&
+            ./configure &&
+            make --silent --jobs=$(nproc)
+          args:
+            chdir: /home/vagrant/spl
+            creates: /home/vagrant/spl/module/spl/spl.ko
+            executable: /bin/bash
+      when: separate_spl
+
+    - name: Create ZFS directory
+      file:
+        path: /home/vagrant/zfs
+        state: directory
+
+    - name: Clone ZFS repository
+      git:
+        repo: https://github.com/zfsonlinux/zfs.git
+        dest: /home/vagrant/zfs
+        version: "zfs-{{ zfs_version }}"
+
+    - name: Build ZFS
+      shell: |
+        sh autogen.sh &&
+        ./configure &&
+        make --silent --jobs=$(nproc)
+      args:
+        chdir: /home/vagrant/zfs
+        creates: /home/vagrant/zfs/module/zfs/zfs.ko
+        executable: /bin/bash

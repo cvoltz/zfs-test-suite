@@ -1,0 +1,22 @@
+#!/bin/bash
+
+if ! sudo virsh list --name --state-running | grep --quiet zfs_test; then
+  echo Start the VM before running this script: vagrant up
+  echo Vagrant will automatically provision the VM when it is created.
+  echo This script is just for debugging the playbook. It is faster than
+  echo running vagrant up --provision.
+  exit 1
+fi
+
+ANSIBLE_FORCE_COLOR=true \
+ANSIBLE_HOST_KEY_CHECKING=false \
+ANSIBLE_SSH_ARGS='-o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes -o ControlMaster=auto -o ControlPersist=60s' \
+PYTHONUNBUFFERED=1 \
+ansible-playbook \
+  --become \
+  --connection=ssh \
+  --inventory-file=.vagrant/provisioners/ansible/inventory \
+  --limit=zfs_test \
+  --timeout=30 \
+  $* \
+  playbook.yml
