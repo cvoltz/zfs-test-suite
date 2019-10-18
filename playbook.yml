@@ -1,90 +1,105 @@
 # © Copyright 2019 Hewlett Packard Enterprise Development LP
+# Build and install ZFS modules in-tree and then run the ZFS test suite.
+# TODO: provide an option to build and install RPMs instead.
 ---
 - hosts: all
 
   vars:
-    separate_spl: true
-    zfs_version: 0.7.13
+    timezone: America/Chicago # select one from timedatectl list-timezones
+    spl_repo: https://github.com/zfsonlinux/spl.git
+    spl_branch: master
+    zfs_repo: https://github.com/zfsonlinux/zfs.git
+    zfs_branch: master
+    # zfs_repo: https://github.com/cvoltz/zfs.git
+    # zfs_branch: fix-9437-pass-2
 
   tasks:
+    - name: Set timezone
+      timezone: name={{ timezone }}
+      tags: update
+
+    - name: Update system
+      include: tasks/update-system.yml
+      tags: update
+
     - name: Install required development packages
-      become: true
-      yum:
-        name:
-          - autoconf
-          - automake
-          - device-mapper-devel
-          - elfutils-libelf-devel
-          - git
-          - kernel-devel
-          - ksh
-          - libacl-devel
-          - libaio-devel
-          - libattr-devel
-          - libblkid-devel
-          - libselinux-devel
-          - libtirpc-devel
-          - libtool
-          - libudev-devel
-          - libuuid-devel
-          - make
-          - openssl-devel
-          - rpm-build
-          - zlib-devel
-          - epel-release
-        state: present
+      include: tasks/install-dependencies.yml
+      tags: install-dependencies
 
-    - name: Install required development packages from EPEL
-      become: true
-      yum:
-        name:
-          - ccache
-          - python36
-          - python36-devel
-          - python36-setuptools
-          - python36-cffi
-
-    - name: SPL block
-      block:
-        - name: Create SPL source directory
-          file:
-            path: /home/vagrant/spl
-            state: directory
-
-        - name: Clone SPL repository
-          git:
-            repo: https://github.com/zfsonlinux/spl.git
-            dest: /home/vagrant/spl
-            version: "spl-{{ zfs_version }}"
-
-        - name: Build SPL
-          shell: |
-            sh autogen.sh &&
-            ./configure &&
-            make --silent --jobs=$(nproc)
-          args:
-            chdir: /home/vagrant/spl
-            creates: /home/vagrant/spl/module/spl/spl.ko
-            executable: /bin/bash
-      when: separate_spl
-
-    - name: Create ZFS directory
-      file:
-        path: /home/vagrant/zfs
-        state: directory
-
-    - name: Clone ZFS repository
-      git:
-        repo: https://github.com/zfsonlinux/zfs.git
-        dest: /home/vagrant/zfs
-        version: "zfs-{{ zfs_version }}"
+    - name: Build SPL
+      become: vagrant
+      include: tasks/build-module.yml
+      vars:
+        branch: "{{ spl_branch }}"
+        module: spl
+        repo: "{{ spl_repo }}"
+      when: spl_repo is defined
+      tags: build-spl
 
     - name: Build ZFS
-      shell: |
-        sh autogen.sh &&
-        ./configure &&
-        make --silent --jobs=$(nproc)
+      become: vagrant
+      include: tasks/build-module.yml
+      vars:
+        branch: "{{ zfs_branch }}"
+        module: zfs
+        repo: "{{ zfs_repo }}"
+      tags: build-zfs
+
+    - name: Setup test helpers
+      become: true
+      command: ./zfs-helpers.sh -i -v
       args:
-        chdir: /home/vagrant/zfs
-        creates: /home/vagrant/zfs/module/zfs/zfs.ko
-        executable: /bin/bash
+         chdir: zfs/scripts
+         creates: /lib/udev/rules.d/90-zfs.rules
+      tags: install-tests
+
+    - name: Give ztest user root access without password
+      become: true
+      lineinfile:
+        path: /etc/sudoers.d/ztest
+        line: "ztest ALL=(ALL:ALL) NOPASSWD: ALL"
+        create: yes
+        owner: root
+        group: root
+        mode: '0644'
+      tags: install-tests
+
+    - name: Exempt vagrant group from secure_path
+      become: true
+      lineinfile:
+        path: /etc/sudoers.d/vagrant
+        line: "Defaults exempt_group += vagrant"
+      tags: install-tests
+
+    - name: Change user's home permissions so delegate tests can be run
+      become: true
+      file:
+        path: /home/vagrant
+        mode: "0750"
+      tags: install-tests
+
+    - name: Get loaded kernel modules
+      shell: lsmod | awk 'NR>1 { print $1 }' | sort
+      changed_when: false
+      register: lsmod
+      tags: install-tests
+
+    - name: Load SPL and ZFS kernel modules
+      become: true
+      command: ./zfs.sh
+      args:
+        chdir: zfs/scripts
+      when: '"zfs" not in lsmod.stdout_lines'
+      tags: install-tests
+
+    - name: Run ZFS test suite
+      become: vagrant
+      shell: |
+        export DISKS="vdb vdc vdd"
+        ./zfs-tests.sh -v -x > ~/tests.log
+        # ./zfs-tests.sh -v -x -t tests/functional/events/events_001_pos
+        # ./zfs-tests.sh -v -x -T events
+        # ../tests/test-runner/cmd/test-runner.py > ~/tests.log
+      args:
+        chdir: zfs/scripts
+      tags: run-tests

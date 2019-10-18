@@ -1,0 +1,31 @@
+# © Copyright 2019 Hewlett Packard Enterprise Development LP
+---
+- name: Create {{ module }} source directory
+  file:
+    path: /home/vagrant/{{ module }}
+    state: directory
+
+- name: Clone {{ module }} repository
+  git:
+    repo: "{{ repo }}"
+    dest: /home/vagrant/{{ module }}
+    version: "{{ branch }}"
+
+- name: Prep {{ module }}
+  command: sh autogen.sh
+  args:
+    chdir: "{{ module }}"
+    creates: configure
+
+- name: Configure {{ module }}
+  command: ./configure --config-cache --prefix=/usr
+  args:
+    chdir: "{{ module }}"
+    creates: Makefile
+
+- name: Build {{ module }}
+  shell: make --silent --jobs=$(nproc)
+  args:
+    chdir: "{{ module }}"
+    creates: module/{{ module }}/{{ module }}.ko
+    executable: /bin/bash

@@ -1,0 +1,64 @@
+# © Copyright 2019 Hewlett Packard Enterprise Development LP
+---
+- name: Get kernel version
+  command: uname -r
+  changed_when: false
+  register: kernel_version
+
+- name: Install packages required to build ZFS
+  become: true
+  yum:
+    name:
+      - autoconf
+      - automake
+      - device-mapper-devel
+      - elfutils-libelf-devel
+      - git
+      - kernel-devel-{{ kernel_version.stdout }}
+      - kernel-headers-{{ kernel_version.stdout }}
+      - ksh
+      - libacl-devel
+      - libaio-devel
+      - libattr-devel
+      - libblkid-devel
+      - libselinux-devel
+      - libtirpc-devel
+      - libtool
+      - libudev-devel
+      - libuuid-devel
+      - make
+      - openssl-devel
+      - rpm-build
+      - zlib-devel
+      - epel-release
+
+- name: Install packages from EPEL required to build ZFS
+  become: true
+  yum:
+    name:
+      - ccache
+      - python36
+      - python36-devel
+      - python36-setuptools
+      - python36-cffi
+
+- name: Install packages required to run ZFS tests
+  become: true
+  yum:
+    name:
+      - acl
+      - bc
+      - fio
+      - ksh
+      - libaio
+      - lsscsi
+      - mdadm
+      - parted
+      - rng-tools
+      - sudo
+      - sysstat
+      # Undocumented requirements
+      - attr
+      - net-tools
+      - pax
+      - samba-common-tools

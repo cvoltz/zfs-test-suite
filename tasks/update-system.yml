@@ -1,0 +1,38 @@
+# © Copyright 2019 Hewlett Packard Enterprise Development LP
+---
+- name: Update all packages
+  become: true
+  yum:
+    name: "*"
+    state: latest
+
+- name: Check if reboot needed
+  shell: needs-restarting --reboothint
+  changed_when: false
+  failed_when: false
+  register: reboot_required
+
+- when: reboot_required.rc != 0
+  block:
+    - name: Reboot
+      become: true
+      command: reboot
+      ignore_errors: true
+      async: 1
+      poll: 0
+      register: rebooting
+
+    - name: Waiting for reboot to finish
+      wait_for_connection:
+        connect_timeout: 20
+        delay: 5
+        sleep: 5
+        timeout: 300
+      register: reboot_result
+
+    - name: Reboot time
+      debug:
+        msg: "System rebooted in {{ reboot_result.elapsed }} seconds"
+
+    - name: Update facts
+      setup:

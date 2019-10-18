@@ -1,0 +1,23 @@
+#!/bin/bash
+# © Copyright 2019 Hewlett Packard Enterprise Development LP
+
+RSYNC_OPTIONS="
+  --archive
+  --inplace
+  --partial
+  --progress
+  --verbose
+"
+
+# Copy output of zfs-tests.sh to current test results directory
+vagrant ssh -c "cp tests.log /var/tmp/test_results/current/"
+
+# Rsync results from VM to test_results directory
+vagrant ssh-config > ssh-config
+host=$(awk '/^Host\W/ { print $2 }' ssh-config)
+rsync $RSYNC_OPTIONS --rsh='ssh -F ssh-config' $host:/var/tmp/test_results .
+file=$(basename $(readlink test_results/current))
+pushd test_results
+rm --force current
+ln --symbolic $file current
+popd

@@ -1,0 +1,48 @@
+--- scripts/zfs-tests.sh.save	2019-10-24 17:52:11.790019163 +0000
++++ scripts/zfs-tests.sh	2019-10-24 17:54:58.143019163 +0000
+@@ -41,7 +41,7 @@
+ DISKS=${DISKS:-""}
+ SINGLETEST=()
+ SINGLETESTUSER="root"
+-TAGS="functional"
++TAGS=""
+ ITERATIONS=1
+ ZFS_DBGMSG="$STF_SUITE/callbacks/zfs_dbgmsg.ksh"
+ ZFS_DMESG="$STF_SUITE/callbacks/zfs_dmesg.ksh"
+@@ -258,7 +258,7 @@
+ 	-s SIZE     Use vdevs of SIZE (default: 4G)
+ 	-r RUNFILE  Run tests in RUNFILE (default: linux.run)
+ 	-t PATH     Run single test at PATH relative to test suite
+-	-T TAGS     Comma separated list of tags
++	-T TAGS     Comma separated list of tags (default: 'functional')
+ 	-u USER     Run single test as USER (default: root)
+ 
+ EXAMPLES:
+@@ -337,6 +337,9 @@
+ LOOPBACKS=${LOOPBACKS:-""}
+ 
+ if [ ${#SINGLETEST[@]} -ne 0 ]; then
++	if [ -n "$TAGS" ]; then
++		fail "-t and -T are mutually exclusive."
++	fi
+ 	RUNFILEDIR="/var/tmp"
+ 	RUNFILE="zfs-tests.$$.run"
+ 	SINGLEQUIET="False"
+@@ -377,11 +380,17 @@
+ tests = ['$SINGLETESTFILE']
+ pre = $SETUPSCRIPT
+ post = $CLEANUPSCRIPT
++tags = ['functional']
+ EOF
+ 	done
+ fi
+ 
+ #
++# Use default tag if none was specified
++#
++TAGS=${TAGS:='functional'}
++
++#
+ # Attempt to locate the runfile describing the test workload.
+ #
+ if [ -n "$RUNFILE" ]; then
